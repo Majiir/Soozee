@@ -1,5 +1,7 @@
 module Soozee.Plugin.Korea (koreaPlugin) where
 
+import Control.Monad (when, join)
+
 import Data.Char (toLower)
 import Data.List (isPrefixOf)
 
@@ -16,22 +18,19 @@ koreaPlugin = newModule {
         (command "korea") {
             aliases = ["kpop"],
             help = say "Korea! http://majiir.net/",
-            process = doKorea
+            process = const doKorea
         }
     ],
-    contextual = \text -> do
-        if any (isPrefixOf "korea") $ (map . map) toLower $ words text
-            then doKorea text
-            else return ()
+    contextual = \text -> when (("korea" `isPrefixOf`) `any` words (map toLower text)) doKorea
 }
 
-doKorea :: String -> Cmd (ModuleT () LB) ()
-doKorea _ = do
-    link <- io $ do
-        r <- simpleHTTP (getRequest "http://majiir.net/random")
-        case r of
-            (Left _) -> return Nothing
-            (Right rsp) -> return $ findHeader HdrLocation rsp
-    case link of
-        (Just str) -> say $ "http://majiir.net" ++ str
-        Nothing -> return ()
+doKorea :: Cmd (ModuleT () LB) ()
+doKorea = io getKorea >>= mapM_ (\x -> say $ "http://majiir.net" ++ x)
+
+getKorea :: IO (Maybe String)
+getKorea = join . hush . fmap (findHeader HdrLocation) <$> simpleHTTP (getRequest "http://majiir.net/random")
+
+-- TODO: use Control.Error.Util instead
+hush :: Either b a -> Maybe a
+hush = either (const Nothing) Just
+
